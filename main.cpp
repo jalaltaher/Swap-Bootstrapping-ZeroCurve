@@ -221,7 +221,8 @@ int main() {
         SwapQuote(1.0, 0.0150),
         SwapQuote(2.0, 0.0190), 
         SwapQuote(3.0, 0.0240),
-        SwapQuote(5.0, 0.0315) 
+        SwapQuote(5.0, 0.0315),
+        SwapQuote(6.0, 0.0400),
     };
 
 
@@ -260,7 +261,7 @@ int main() {
     }
 
     cout << "---Interpolation of new swaps---" << endl;
-    vector<double> newSwapMaturities = {2.4,4.0, 6.0, 10.0};
+    vector<double> newSwapMaturities = {4.0,4.7,5.5};
     vector<SwapQuote> interpolatedSwaps;
 
     for(double mat: newSwapMaturities){
