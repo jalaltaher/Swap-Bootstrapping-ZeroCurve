@@ -68,38 +68,30 @@ Where:
 Using the replication argument:
 
 $$
-PV_{\text{Floating}} = N(1 - DF(T_n))
+PV_{\text{Floating}} = N(1 - DF(T_n)).
 $$
 
 ### Derivation (Telescoping Sum)
-
-Floating coupon:
-
-$$
-PV(\text{Coupon}_i) = N(DF(t_{i-1}) - DF(t_i))
-$$
-
-Summing:
+Using the forward rate $F(t_{j-1},t_j) = \frac{1}{\tau_j}\left(\frac{DF(t_{j-1})}{DF(t_j)} - 1\right)$ between paiment dates
 
 $$
 PV_{\text{Floating}}
-= \sum_{i=1}^{n} N(DF(t_{i-1}) - DF(t_i))
-= N(1 - DF(t_n))
+= \sum_{i=1}^{n} N F(t_{j-1},t_j) D(t_{j})
+=  \sum_{i=1}^{n} N DF(t_{j-1}) - DF(t_j) = N (1- DF(t_n)).
 $$
+
 
 ---
 
 # IV. The Bootstrapping Process (Calibration)
 
-Bootstrapping solves for each unknown discount factor recursively.
-
-Since swaps are quoted at **zero NPV**:
+Bootstrapping solves for each unknown discount factor recursively. We calculate the rate for the pillars (for the maturities that are provided for the swap inputs). Since swaps are quoted at **zero NPV**:
 
 $$
 PV_{\text{Fixed}} = PV_{\text{Floating}}
 $$
 
-Separating the known and unknown terms:
+Separating the known (eithera pillar or computed by linear interpolation) and unknown terms (the new pillar):
 
 $$
 N S \left[
