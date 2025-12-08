@@ -74,7 +74,7 @@ public:
     double getMaxMaturity() const{
         return _curveData.empty() ? 0.0 : _curveData.rbegin()->first;
     }
-    map<double,double> getCurve() const{
+    const map<double,double>& getCurve() const{
         return _curveData;
     }
 
@@ -99,8 +99,8 @@ public:
              });
     }
 
-    ZeroCurve calibrate(ZeroCurve initialCurve) {
-        ZeroCurve curve = initialCurve;
+    void calibrate(ZeroCurve& curve) {
+
         for (const auto& swap : _quotes) {
             double mat = swap.maturity();
             double S = swap.rate();
@@ -111,7 +111,7 @@ public:
 
             // Calculate the discount factor at DF_n = (1.0 - \sum_{i=1}^{n} \tau_i DF(T_i)) / (1.0 + tau_n*S)
             double sumDiscountedCoupons = 0.0;
-            
+            /*
             for(int i = 1; i*FIXED_TAU < mat; ++i) {
                 sumDiscountedCoupons += S * FIXED_TAU * curve.getDiscountFactor(FIXED_TAU*i);
             }
@@ -119,7 +119,22 @@ public:
 
             double tau_n = mat - floor(2.0*mat)/2.0; // The remaining tau_n for the last period [t_{n-1}, t_n[, t_n being the pillar
 
-            
+            */
+            int n = static_cast<int>(floor(mat / FIXED_TAU)); // number of full periods
+
+
+            // Sum over full periods
+            for (int i = 1; i <= n; ++i) {
+                double t = i * FIXED_TAU;
+                if (t >= mat) break; // safety check
+                sumDiscountedCoupons += S * FIXED_TAU * curve.getDiscountFactor(t);
+            }
+
+            // Handle the last partial period, if any
+            double tau_n = mat - n * FIXED_TAU; 
+            if (tau_n > 1e-12) { // only if significant
+                sumDiscountedCoupons += S * tau_n * curve.getDiscountFactor(mat);
+            }
             double df_n = (1.0 - sumDiscountedCoupons)/(1.0 + tau_n*S);
 
             // Convert to Zero Rate (Continuously Compounded)
@@ -132,7 +147,6 @@ public:
                       << (zeroRate * 100) << "%" << endl;
         }
 
-        return curve;
         }
 
 
@@ -151,12 +165,20 @@ class SwapPricer {
     // Calculates the Present Value of the Annuity (PV of all fixed coupons)
         double annuity(const ZeroCurve& curve, double maturity) const{
             double sum = 0.0;
-            for(double t=FIXED_TAU; t< maturity ; t+= FIXED_TAU){
-                sum+= FIXED_TAU * curve.getDiscountFactor(t);
-            }
-            //Handle the final period
-            double last_tau = maturity - floor(2*maturity)/2.0; // Last irregular year fraction
+           int n = static_cast<int>(floor(maturity / FIXED_TAU)); // number of full periods
+
+        // Sum over full periods
+        for (int i = 1; i <= n; ++i) {
+            double t = i * FIXED_TAU;
+            if (t >= maturity) break; // safety check
+            sum += FIXED_TAU * curve.getDiscountFactor(t);
+        }
+
+        // Handle the last partial period, if any
+        double last_tau = maturity - n * FIXED_TAU;
+        if (last_tau > 1e-12) { // only if significant
             sum += last_tau * curve.getDiscountFactor(maturity);
+        }
             return sum;
         }
 
@@ -245,7 +267,7 @@ int main() {
 
     cout << "--- Boostrap ---" << endl;
     Bootstrapper solver(marketData);
-    curve = solver.calibrate(curve);
+    solver.calibrate(curve);
 
     cout << "---Verification of the NPV---" <<endl;
     cout << setw(10) << "Maturity" << setw(15) << "Market Rate" << endl;
@@ -253,14 +275,13 @@ int main() {
         double fairRate = pricer.calculateFaireRate(curve, q.maturity());
         double npv = pricer.priceSwap(curve,q.maturity(), q.rate());
 
-        cout << fixed << setprecision(4)
+        cout << fixed << setprecision(6)
              << setw(10) << q.maturity()
              << setw(15) << q.rate()*100 << "%"
              << setw(15)  << fairRate * 100 << "%"
              << " | NPV: " << npv << " (should be near 0)" << endl;
     }
-
-    cout << "---Interpolation of new swaps---" << endl;
+    
     vector<double> newSwapMaturities = {4.0,4.7,5.5};
     vector<SwapQuote> interpolatedSwaps;
 
