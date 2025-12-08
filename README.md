@@ -115,3 +115,26 @@ $$
 This is repeated for each maturity.
 
 ---
+
+
+# VI. Figures
+
+## **Figure 1 — Market Swap Rates and Interpolated Fair Swap Rates**
+
+This figure shows:
+- The **market-quoted swap rates** (the inputs)
+- The **interpolated/fair swap rates** derived from the bootstrapped zero curve
+
+![Figure 1: Market Swap Rates and Interpolated Swap Rates](swap_quotes_plot.jpg)
+
+---
+
+## **Figure 2 — Bootstrapped Zero Coupon Curve (Zero Rates)**
+
+This figure shows:
+- The calibrated **zero rate pillars** (output of the bootstrap)
+- The shape of the resulting **zero curve**
+
+![Figure 2: Zero Curve (Bootstrapped Zero Rates)](zero_curve_plot.jpg)
+
+---
