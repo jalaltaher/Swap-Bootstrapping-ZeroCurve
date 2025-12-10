@@ -83,36 +83,44 @@ $$
 
 ---
 
-# IV. The Bootstrapping Process (Calibration)
+## V. The Bootstrapping Process (Calibration via Secant Method)
 
-Bootstrapping solves for each unknown discount factor recursively. We calculate the rate for the pillars (for the maturities that are provided for the swap inputs). Since swaps are quoted at **zero NPV**:
+Bootstrapping solves for each unknown discount factor recursively. We calculate the Zero Rate $r(T_n)$ for the pillars ($T_n$) provided by the swap inputs.
 
-$$
-PV_{\text{Fixed}} = PV_{\text{Floating}}
-$$
+The core principle is that the swap is initiated at zero Net Present Value (NPV):
 
-Separating the known (eithera pillar or computed by linear interpolation) and unknown terms (the new pillar):
+$$PV_{\text{Fixed}} = PV_{\text{Floating}} \quad \implies \quad PV_{\text{Floating}} - PV_{\text{Fixed}} = 0$$
 
-$$
-N S \left[
-\sum_{i=1}^{n-1} (\tau_i DF(t_i)) + \tau_n DF(T_n)
-\right]
-= N(1 - DF(T_n))
-$$
+### A. The Root-Finding Problem
 
-Solving for the unknown **final discount factor**:
+When intermediate coupon dates require interpolation, the interpolation itself relies on the unknown rate $r(T_n)$.  
+This creates a circular dependency, making the closed-form algebraic solution invalid.
 
-$$
-\boxed{
-DF(T_n) =
-\frac{
-1 - S \sum_{\text{known}} (\tau_i DF(t_i))
-}{
-1 + S\,\tau_n
-}}
-$$
+We reformulate the problem as finding the root of a function $f(r)$:
 
-This is repeated for each maturity.
+$$\mathbf{f(r) = PV_{\text{Floating}}(r) - PV_{\text{Fixed}}(r)}$$
+
+We seek the Zero Rate $r$ at maturity $T_n$ such that $f(r) = 0$.
+
+---
+
+### B. The Secant Method
+
+The Secant Method is an iterative numerical solver used to find the root.  
+It approximates the solution without requiring the derivative of $f(r)$.
+
+The method starts with two initial guesses for the unknown rate ($r_0, r_1$) and iterates toward convergence.
+
+The update formula for the next rate guess ($r_{k+1}$) is:
+
+$$\mathbf{r_{k+1} = r_k - f(r_k) \frac{r_k - r_{k-1}}{f(r_k) - f(r_{k-1})}}$$
+
+Where:
+
+- $r_k$ is the current guess for the Zero Rate at $T_n$  
+- $f(r_k)$ is the NPV error calculated by temporarily setting $r(T_n) = r_k$ on the curve  
+
+This iterative process is repeated sequentially for every swap maturity, ensuring that the interpolation dependency is handled correctly at every step.
 
 ---
 
@@ -144,15 +152,15 @@ vector<SwapQuote> marketData = {
 };
 ```
 
-
 ## --- Bootstrapping Calibration Results ---
+
 | Maturity (Y) | Calibrated Zero Rate |
-|-------------|-----------------------|
-| 1.000000    | 0.749067% |
-| 2.000000    | 1.434158% |
-| 3.000000    | 2.023314% |
-| 5.000000    | 2.914099% |
-| 6.000000    | 3.833820% |
+|--------------|-----------------------|
+| 1.000000     | 1.496269% |
+| 2.000000     | 1.896485% |
+| 3.000000     | 2.402950% |
+| 5.000000     | 3.178973% |
+| 6.000000     | 4.111352% |
 
 ---
 
@@ -160,14 +168,13 @@ vector<SwapQuote> marketData = {
 
 | Maturity (Y) | Market Rate | Fair Rate | NPV | Note |
 |--------------|-------------|-----------|------|------|
-| 0.5000 | 1.0000% | 0.0000% | 0.0050 | should be near 0 |
-| 1.0000 | 1.5000% | 1.5000% | 0.0000 | should be near 0 |
-| 2.0000 | 1.9000% | 1.9032% | 0.0000 | should be near 0 |
-| 3.0000 | 2.4000% | 2.4035% | 0.0001 | should be near 0 |
-| 5.0000 | 3.1500% | 3.1686% | 0.0008 | should be near 0 |
-| 6.0000 | 4.0000% | 4.0083% | 0.0004 | should be near 0 |
+| 0.5000 | 1.0000% | 1.0000% | -1.344e-16 | should be near 0 |
+| 1.0000 | 1.5000% | 1.5000% | -9.741e-14 | should be near 0 |
+| 2.0000 | 1.9000% | 1.9000% | -8.332e-13 | should be near 0 |
+| 3.0000 | 2.4000% | 2.4000% | -2.420e-11 | should be near 0 |
+| 5.0000 | 3.1500% | 3.1500% | -1.588e-14 | should be near 0 |
+| 6.0000 | 4.0000% | 4.0000% | -3.079e-13 | should be near 0 |
 
----
 
 
 # VI. Figures
