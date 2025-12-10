@@ -83,7 +83,7 @@ $$
 
 ---
 
-## V. The Bootstrapping Process (Calibration via Secant Method)
+## IV. The Bootstrapping Process (Calibration via Secant Method)
 
 Bootstrapping solves for each unknown discount factor recursively. We calculate the Zero Rate $r(T_n)$ for the pillars ($T_n$) provided by the swap inputs.
 
@@ -106,11 +106,8 @@ We seek the Zero Rate $r$ at maturity $T_n$ such that $f(r) = 0$.
 
 ### B. The Secant Method
 
-The Secant Method is an iterative numerical solver used to find the root.  
-It approximates the solution without requiring the derivative of $f(r)$.
-
+The Secant Method approximates the solution without requiring the derivative of $f(r)$.
 The method starts with two initial guesses for the unknown rate ($r_0, r_1$) and iterates toward convergence.
-
 The update formula for the next rate guess ($r_{k+1}$) is:
 
 $$\mathbf{r_{k+1} = r_k - f(r_k) \frac{r_k - r_{k-1}}{f(r_k) - f(r_{k-1})}}$$
