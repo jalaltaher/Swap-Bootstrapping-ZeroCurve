@@ -73,14 +73,79 @@ public:
     const map<double,double>& getCurve() const{
         return _curveData;
     }
-    
-    double getMaxMaturity() const{
-        if(_curveData.empty()) return 0;
-        return _curveData.rbegin()->first;
-    }
 
 };
 
+// ==========================================
+// 3. THE BOOTSTRAPPER 
+// ==========================================
+
+class Bootstrapper {
+private:
+    vector<SwapQuote> _quotes;
+    const double FIXED_TAU = 0.5; // We assume semi-annual paiement 
+
+public:
+
+    Bootstrapper(const std::vector<SwapQuote>& quotes) : _quotes(quotes) {
+        // Sort inputs by maturity to be safe
+        std::sort(_quotes.begin(), _quotes.end(), 
+             [](const SwapQuote& a, const SwapQuote& b) { 
+                 return a.maturity() < b.maturity(); 
+             });
+    }
+
+    void calibrate(ZeroCurve& curve) {
+
+        for (const auto& swap : _quotes) {
+            double mat = swap.maturity();
+            double S = swap.rate();
+
+            if (curve.getCurve().count(mat)){
+                continue;
+            }
+
+            // Calculate the discount factor at DF_n = (1.0 - \sum_{i=1}^{n-1} \tau_i DF(T_i)) / (1.0 + tau_n*S)
+            double sumDiscountedCoupons = 0.0;
+            /*
+            for(int i = 1; i*FIXED_TAU < mat; ++i) {
+                sumDiscountedCoupons += S * FIXED_TAU * curve.getDiscountFactor(FIXED_TAU*i);
+            }
+  
+
+            double tau_n = mat - floor(2.0*mat)/2.0; // The remaining tau_n for the last period [t_{n-1}, t_n[, t_n being the pillar
+
+            */
+            int n = static_cast<int>(floor(mat / FIXED_TAU)); // number of full periods
+
+
+            // Sum over full periods
+            for (int i = 1; i < n; ++i) {
+                double t = i * FIXED_TAU;
+                if (t >= mat) break; // safety check
+                sumDiscountedCoupons += S * FIXED_TAU * curve.getDiscountFactor(t);
+            }
+
+            // Handle the last partial period, if any
+            double tau_n = mat - (n-1) * FIXED_TAU; 
+           
+            double df_n = (1.0 - sumDiscountedCoupons)/(1.0 + tau_n*S);
+
+            // Convert to Zero Rate (Continuously Compounded)
+            // r_n = -ln(DF(T_n)) / t
+            double zeroRate = (df_n > 0) ? -log(df_n) / mat : 0.0;
+
+            curve.addNode(mat, zeroRate);
+            
+            cout << "Calibrated " << mat << "Y Swap. Zero Rate: " 
+                      << (zeroRate * 100) << "%" << endl;
+        }
+
+        }
+
+
+
+};
 
 // ==========================================
 // 4. SWAP PRICER (interpolation)
@@ -131,82 +196,6 @@ class SwapPricer {
         return pvFloat - pvFixed; 
     }
 };
-
-// ==========================================
-// 3. THE BOOTSTRAPPER 
-// ==========================================
-
-class Bootstrapper {
-private:
-    vector<SwapQuote> _quotes;
-    const double FIXED_TAU = 0.5; // We assume semi-annual paiement 
-    SwapPricer _pricer;
-public:
-
-    Bootstrapper(const std::vector<SwapQuote>& quotes) : _quotes(quotes) {
-        // Sort inputs by maturity to be safe ! We store a copy of the quotes here to avoid sorting the original data.
-        std::sort(_quotes.begin(), _quotes.end(), 
-             [](const SwapQuote& a, const SwapQuote& b) { 
-                 return a.maturity() < b.maturity(); 
-             });
-    }
-
-    void calibrate(ZeroCurve& curve) {
-
-        for (const auto& swap : _quotes) {
-            double mat = swap.maturity();
-            double S = swap.rate();
-
-            if (curve.getCurve().count(mat)){
-                continue;
-            }
-
-            // Secant method solver
-            // We find zero rate x such that NPV_swap(x) == 0
-
-            //1. First two guesses
-            double r_prev = curve.getZeroRate(curve.getMaxMaturity());
-            double x0 = r_prev;
-            double x1 = r_prev + 0.0010;
-
-            double y0, y1;
-
-            int max_iter = 50;
-            double epsilon = 1e-9;
-
-            for(int k=0; k<max_iter; k++){
-                curve.addNode(mat,x0);
-                y0 = _pricer.priceSwap(curve,mat,S);
-                if(abs(y0)<epsilon) break;
-
-                curve.addNode(mat,x1);
-                y1 = _pricer.priceSwap(curve,mat,S);
-                if(abs(y1)<epsilon){
-                    x0=x1;
-                    break;
-                }
-
-                if (abs(y1-y0)<1e-12){
-                    x1=x1 + 0.0001;
-                }
-
-                double x_new = x1- y1*(x1-x0)/(y1-y0);
-
-                x0=x1;
-                x1= x_new;
-            }
-
-            curve.addNode(mat,x0);
-
-            
-            cout << "Calibrated " << mat << "Y Swap. Zero Rate: " 
-                      << (x0 * 100) << "%" << endl;
-        }
-
-        }
-
-};
-
 // ==========================================
 // 4. EXPORT FUNCTIONS
 // ==========================================
@@ -248,8 +237,8 @@ int main() {
         SwapQuote(1.0, 0.0150),
         SwapQuote(2.0, 0.0190), 
         SwapQuote(3.0, 0.0240),
-        SwapQuote(5.0, 0.0315),
-        SwapQuote(6.0, 0.0400),
+        //SwapQuote(5.0, 0.0315),
+        //SwapQuote(6.0, 0.0400),
     };
 
 
@@ -280,18 +269,11 @@ int main() {
         double fairRate = pricer.calculateFaireRate(curve, q.maturity());
         double npv = pricer.priceSwap(curve,q.maturity(), q.rate());
 
-        cout << setw(10) << fixed << setprecision(3)
-     << q.maturity()
-     << setw(15) << fixed << setprecision(3)
-     << q.rate() * 100 << "%"
-
-     // fair rate: 
-     << setw(15) << fixed << setprecision(3)
-     << fairRate * 100 << "%"
-
-     << " | NPV: " << scientific << npv << " (should be near 0)"
-     << endl;
-
+        cout << fixed << setprecision(10)
+             << setw(10) << q.maturity()
+             << setw(15) << q.rate()*100 << "%"
+             << setw(15)  << fairRate * 100 << "%"
+             << " | NPV: " << npv << " (should be near 0)" << endl;
     }
     
     vector<double> newSwapMaturities = {4.0,4.7,5.5};
@@ -299,7 +281,8 @@ int main() {
 
     for(double mat: newSwapMaturities){
         double fairRateInterp = pricer.calculateFaireRate(curve, mat);
-        interpolatedSwaps.emplace_back(mat, fairRateInterp);
+        SwapQuote interpolatedSwap(mat, fairRateInterp);
+        interpolatedSwaps.push_back(interpolatedSwap);
     }
 
 
